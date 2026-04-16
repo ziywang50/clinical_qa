@@ -10,3 +10,7 @@
 {
     "question": ""
 }
+"What is the current evidence for GLP-1 receptor agonists in obesity management?"
+"Are there active clinical trials for CAR-T therapy in lupus?"
+"What are the common adverse effects reported for pembrolizumab?"
+"Is there evidence supporting SGLT2 inhibitors in heart failure with preserved ejection fraction?"

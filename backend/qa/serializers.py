@@ -3,6 +3,8 @@ from rest_framework import serializers
 
 class QARequestSerializer(serializers.Serializer):
     question = serializers.CharField(min_length=1)
+    max_tokens_answer = serializers.IntegerField(required=False, default=2048)
+    max_tokens_limitations = serializers.IntegerField(required=False, default=384)
 
 
 class SourceSerializer(serializers.Serializer):

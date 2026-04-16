@@ -29,12 +29,13 @@ class QAView(APIView):
         serializer = QARequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        max_tokens_answer = serializer.validated_data["max_tokens_answer"]
+        max_tokens_limitations = serializer.validated_data["max_tokens_limitations"]
         question = serializer.validated_data["question"]
         start = time.time()
 
         try:
-            result = async_to_sync(self._run_pipeline)(question, start)
+            result = async_to_sync(self._run_pipeline)(question, start, max_tokens_answer, max_tokens_limitations)
         except anthropic.APIError:
             return Response(
                 {"error": "LLM unavailable, please retry"},
@@ -43,7 +44,7 @@ class QAView(APIView):
 
         return Response(result, status=status.HTTP_200_OK)
 
-    async def _run_pipeline(self, question: str, start: float) -> dict:
+    async def _run_pipeline(self, question: str, start: float, max_tokens_answer: int, max_tokens_limitations: int) -> dict:
         keywords = await extract_keywords(question)
 
         ct_docs, pubmed_docs = await asyncio.gather(
@@ -53,7 +54,7 @@ class QAView(APIView):
 
         all_sources = ct_docs + pubmed_docs
 
-        answer = await generate_answer(question, all_sources)
+        answer = await generate_answer(question, all_sources, max_tokens_answer, max_tokens_limitations)
 
         latency_ms = int((time.time() - start) * 1000)
 

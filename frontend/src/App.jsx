@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import SearchBar from './components/SearchBar'
 import AnswerPanel from './components/AnswerPanel'
 
@@ -9,20 +9,42 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [cancelled, setCancelled] = useState(false)
+
+  // Token options
+  const [maxTokensAnswer, setMaxTokensAnswer] = useState(2048)
+  const [maxTokensLimitations, setMaxTokensLimitations] = useState(384)
+
+  const abortControllerRef = useRef(null)
+
+  function handleStop() {
+    abortControllerRef.current?.abort()
+  }
 
   async function handleSubmit(q) {
     const trimmed = (q ?? question).trim()
     if (!trimmed) return
 
+    // Cancel any in-flight request before starting a new one
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setLoading(true)
     setResult(null)
     setError(null)
+    setCancelled(false)
 
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({
+          question: trimmed,
+          max_tokens_answer: maxTokensAnswer,
+          max_tokens_limitations: maxTokensLimitations,
+        }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
@@ -33,7 +55,11 @@ export default function App() {
       const data = await res.json()
       setResult(data)
     } catch (err) {
-      setError(err.message || 'An unexpected error occurred.')
+      if (err.name === 'AbortError') {
+        setCancelled(true)
+      } else {
+        setError(err.message || 'An unexpected error occurred.')
+      }
     } finally {
       setLoading(false)
     }
@@ -53,7 +79,12 @@ export default function App() {
           question={question}
           setQuestion={setQuestion}
           onSubmit={handleSubmit}
+          onStop={handleStop}
           loading={loading}
+          maxTokensAnswer={maxTokensAnswer}
+          setMaxTokensAnswer={setMaxTokensAnswer}
+          maxTokensLimitations={maxTokensLimitations}
+          setMaxTokensLimitations={setMaxTokensLimitations}
         />
 
         {loading && (
@@ -79,6 +110,15 @@ export default function App() {
               />
             </svg>
             <span>Searching clinical databases...</span>
+          </div>
+        )}
+
+        {cancelled && !loading && (
+          <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 border border-gray-200 rounded-lg px-4 py-3">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>Search cancelled.</span>
           </div>
         )}
 

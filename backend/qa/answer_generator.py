@@ -36,8 +36,17 @@ def _build_context(sources: list[dict]) -> str:
         lines.append(f"[{i}] {source_type}: {title}\n{content}")
     return "\n\n".join(lines)
 
+def _trim_at_last_sentence(text: str) -> str:
+    """Trim the text at the last sentence boundary."""
+    text = text.strip()
+    if text.endswith((".", "!", "?", "]", ")")):
+        return text
+    last_period = text.rfind(".")
+    if last_period > 0:
+        return text[: last_period + 1]
+    return text
 
-async def generate_answer(question: str, sources: list[dict]) -> str:
+async def generate_answer(question: str, sources: list[dict], max_tokens_answer: int = 2048, max_tokens_limitations: int = 384) -> str:
     if not sources:
         return (
             "No relevant studies found for this query. Try rephrasing with different terms. "
@@ -52,19 +61,19 @@ async def generate_answer(question: str, sources: list[dict]) -> str:
         answer_msg, limitation_msg = await asyncio.gather(
             client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=2048,
+                max_tokens=max_tokens_answer,
                 system=system_prompt,
                 messages=[{"role": "user", "content": question}],
             ),
             client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=256,
+                max_tokens=max_tokens_limitations,
                 system=LIMITATION_PROMPT,
                 messages=[{"role": "user", "content": f"Question: {question}\n\nContext:\n{context}"}],
             ),
         )
-        answer = answer_msg.content[0].text.strip()
-        limitations = limitation_msg.content[0].text.strip()
+        answer = _trim_at_last_sentence(answer_msg.content[0].text.strip())
+        limitations = _trim_at_last_sentence(limitation_msg.content[0].text.strip())
         return f"{answer}\n{limitations}"
     except anthropic.APIError:
         raise
