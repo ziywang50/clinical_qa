@@ -1,0 +1,12 @@
+{
+    "question": "What is the current evidence for GLP-1 receptor agonists in obesity management?"
+}
+{
+    "question": "What does recent research say about pembrolizumab in non-small cell lung cancer?"
+}
+{
+    "question": "What is my birthday?"
+}
+{
+    "question": ""
+}

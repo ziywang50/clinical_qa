@@ -1,0 +1,70 @@
+import os
+import anthropic
+import asyncio
+
+SYSTEM_PROMPT_TEMPLATE = """You are a clinical research assistant. Answer the user's question using ONLY the provided research context below.
+
+Rules:
+1. Every factual claim MUST have an inline citation like [1] or [2][3].
+2. If the context does not contain enough information to answer, say so clearly.
+3. Do not fabricate trial results, statistics, or outcomes not present in the context.
+4. Structure your answer: brief direct answer first, then supporting evidence.
+5. Do NOT use generic medical disclaimers like "This does not constitute medical advice."
+
+Context:
+{context}
+"""
+#added limitation section
+LIMITATION_PROMPT = """
+You are given a clinical question and the sources retrieved to answer it.
+Write ONLY a "## Limitations" section. Do not repeat the answer.
+Address:
+- If PubMed or ClinicalTrials.gov returned 0 results, state this gap.
+- If evidences are missing key aspects or conflicting, state this
+- Specific weaknesses (small sample, single-country, early-phase, etc.).
+- If any sources appear irrelevant.
+Be specific. Do not use generic disclaimers. Do not write anything other than the limitations section. If there are no limitations found, return an empty string.
+"""
+
+
+def _build_context(sources: list[dict]) -> str:
+    lines = []
+    for i, source in enumerate(sources, start=1):
+        source_type = source.get("source_type", "unknown").upper()
+        title = source.get("title", "No title")
+        content = source.get("content", "")
+        lines.append(f"[{i}] {source_type}: {title}\n{content}")
+    return "\n\n".join(lines)
+
+
+async def generate_answer(question: str, sources: list[dict]) -> str:
+    if not sources:
+        return (
+            "No relevant studies found for this query. Try rephrasing with different terms. "
+            "This summary is for informational purposes only and does not constitute medical advice."
+        )
+
+    context = _build_context(sources)
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(context=context)
+
+    client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    try:
+        answer_msg, limitation_msg = await asyncio.gather(
+            client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{"role": "user", "content": question}],
+            ),
+            client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=256,
+                system=LIMITATION_PROMPT,
+                messages=[{"role": "user", "content": f"Question: {question}\n\nContext:\n{context}"}],
+            ),
+        )
+        answer = answer_msg.content[0].text.strip()
+        limitations = limitation_msg.content[0].text.strip()
+        return f"{answer}\n{limitations}"
+    except anthropic.APIError:
+        raise
