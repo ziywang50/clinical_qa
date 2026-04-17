@@ -55,6 +55,8 @@ async def generate_answer(question: str, sources: list[dict], max_tokens_answer:
 
     context = _build_context(sources)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(context=context)
+    ct_count = sum(1 for s in sources if s.get("source_type") == "clinicaltrials")
+    pubmed_count = sum(1 for s in sources if s.get("source_type") == "pubmed")
 
     client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     try:
@@ -69,11 +71,11 @@ async def generate_answer(question: str, sources: list[dict], max_tokens_answer:
                 model="claude-sonnet-4-6",
                 max_tokens=max_tokens_limitations,
                 system=LIMITATION_PROMPT,
-                messages=[{"role": "user", "content": f"Question: {question}\n\nContext:\n{context}"}],
+                messages=[{"role": "user", "content": f"Question: {question}\n\nClinicalTrials.gov returned {ct_count} results. PubMed returned {pubmed_count} results.\n\nContext:\n{context}"}],
             ),
         )
         answer = _trim_at_last_sentence(answer_msg.content[0].text.strip())
         limitations = _trim_at_last_sentence(limitation_msg.content[0].text.strip())
-        return f"{answer}\n{limitations}"
+        return f"{answer}\n\n{limitations}"
     except anthropic.APIError:
         raise
